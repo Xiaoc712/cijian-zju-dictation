@@ -1,0 +1,7 @@
+{
+  "pages": ["pages/study/index"],
+  "window": { "navigationBarTitleText": "词间默写", "navigationBarBackgroundColor": "#ffffff", "navigationBarTextStyle": "black", "backgroundColor": "#f7f8fc", "backgroundTextStyle": "dark", "enablePullDownRefresh": false },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}

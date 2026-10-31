@@ -1,0 +1,10 @@
+page { background:#f7f8fc; color:#242738; font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif; font-size:14px; }
+view,text,input,button,picker,scroll-view,form { box-sizing:border-box; }
+button { margin:0; padding:0; border-radius:10px; font-size:13px; line-height:normal; display:flex; align-items:center; justify-content:center; min-height:42px; background:var(--surface); color:var(--text); border:1px solid var(--border); }
+button::after { border:0; } button[disabled] { opacity:.45; color:var(--muted); background:var(--disabled); }
+.primary { background:var(--accent-fill); color:var(--on-accent); border-color:var(--accent-fill); box-shadow:0 4px 12px var(--accent-shadow); }
+.secondary { background:var(--surface); color:var(--text); }
+.link { background:transparent; border:0; box-shadow:none; min-height:32px; color:var(--accent); font-size:12px; }
+.cut { background:var(--positive-soft); color:var(--positive); border-color:var(--positive-border); }
+.card { background:var(--surface); border:1px solid var(--border); border-radius:18px; }
+.muted { color:var(--muted); }.small { font-size:11px; }.hidden { display:none; }

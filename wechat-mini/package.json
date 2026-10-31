@@ -1,0 +1,13 @@
+{
+  "name": "daying-vocab-wechat",
+  "version": "1.0.2",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/*.test.cjs",
+    "validate": "node scripts/validate.cjs",
+    "generate": "node scripts/generate.cjs"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

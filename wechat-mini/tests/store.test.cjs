@@ -1,0 +1,90 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { StudyStore } = require('../miniprogram/lib/store');
+const { createHandler } = require('../cloudfunctions/studySync/service');
+const { EMPTY_STUDY } = require('../miniprogram/lib/learning');
+const { nativeAPI, memoryDatabase, clone } = require('./helpers.cjs');
+const tick = () => new Promise(resolve=>setImmediate(resolve));
+
+test('local mode persists draft and flags without claiming cloud sync', async t => {
+  const wxAPI = nativeAPI();
+  const first = new StudyStore({wxAPI,cloudEnabled:false}); t.after(()=>first.destroy());
+  await first.initialize();
+  const state = clone(EMPTY_STUDY); state.preferences.book = 'book3';
+  first.change(state,[{key:'apple',kind:'mastered'}]);
+  const second = new StudyStore({wxAPI,cloudEnabled:false}); t.after(()=>second.destroy());
+  await second.initialize();
+  assert.equal(second.view.state.preferences.book,'book3');
+  assert.equal(second.view.records.apple.mastered,true);
+  assert.equal(second.view.status,'local');
+});
+test('separate devices converge after offline changes and reconnect', async t => {
+  const handler=createHandler({db:memoryDatabase(),getOpenid:()=> 'learner'});
+  const a=new StudyStore({wxAPI:nativeAPI(),cloudEnabled:true,transport:handler});
+  const b=new StudyStore({wxAPI:nativeAPI(),cloudEnabled:true,transport:handler});
+  t.after(()=>{a.destroy();b.destroy();});
+  await a.initialize(); await b.initialize();
+  a.online=false;
+  a.change(a.view.state,[{key:'apple',kind:'mastered'}]);
+  assert.equal(a.view.status,'offline');
+  assert.equal(a.queue.length,1);
+  a.online=true; await a.flush(); await b.flush();
+  assert.equal(b.view.records.apple.mastered,true);
+  assert.equal(a.queue.length,0);
+  assert.equal(a.view.status,'synced');
+});
+test('failed requests retain queued changes and show a retry state', async t => {
+  const store=new StudyStore({wxAPI:nativeAPI(),cloudEnabled:true,transport:async()=>{throw Error('offline');}});
+  t.after(()=>store.destroy());
+  await store.initialize();
+  store.change(store.view.state,[{key:'apple',kind:'wrong'}]);
+  await store.flush();
+  assert.equal(store.queue.length,1);
+  assert.equal(store.view.status,'error');
+  assert.equal(store.view.lastSynced,null);
+});
+test('writes during a request survive its acknowledgement', async t => {
+  const handler=createHandler({db:memoryDatabase(),getOpenid:()=> 'learner'});
+  let release, hold=false;
+  const store=new StudyStore({wxAPI:nativeAPI(),cloudEnabled:true,transport:async data=>{
+    if(hold && data.action==='sync') await new Promise(resolve=>{release=resolve;});
+    return handler(data);
+  }});
+  t.after(()=>store.destroy());
+  await store.initialize();
+  store.change(store.view.state,[{key:'apple',kind:'wrong'}]);
+  hold=true;
+  const pending=store.flush(); await tick();
+  store.change(store.view.state,[{key:'banana',kind:'mastered'}]);
+  hold=false;release();await pending;
+  assert.equal(store.queue.length,1);
+  assert.equal(store.view.records.banana.mastered,true);
+  assert.equal(store.dirty,true);
+  await store.flush();assert.equal(store.queue.length,0);
+});
+test('conflicting progress waits for a deliberate choice', async t => {
+  const handler=createHandler({db:memoryDatabase(),getOpenid:()=> 'learner'});
+  const a=new StudyStore({wxAPI:nativeAPI(),cloudEnabled:true,transport:handler});
+  const b=new StudyStore({wxAPI:nativeAPI(),cloudEnabled:true,transport:handler});
+  t.after(()=>{a.destroy();b.destroy();});
+  await a.initialize();await b.initialize();
+  const next=clone(a.view.state);next.preferences.book='book2';a.change(next);await a.flush();
+  b.change(b.view.state,[{key:'apple',kind:'wrong'}]);await b.flush();
+  assert.equal(b.view.status,'conflict');
+  assert.equal(b.view.records.apple.wrong,true);
+  b.resolveConflict(false);await tick();
+  assert.equal(b.view.state.preferences.book,'book2');
+  assert.equal(b.view.conflict,null);
+});
+test('storage quota failure never deletes the only local migration copy', async t => {
+  const wxAPI=nativeAPI();
+  const local=new StudyStore({wxAPI,cloudEnabled:false});await local.initialize();
+  local.change(local.view.state,[{key:'apple',kind:'mastered'}]);local.destroy();
+  wxAPI.setStorageSync=()=>{throw Error('quota');};
+  const cloud=new StudyStore({wxAPI,cloudEnabled:true,transport:createHandler({db:memoryDatabase(),getOpenid:()=> 'learner'})});
+  t.after(()=>cloud.destroy());
+  await cloud.initialize();
+  assert.ok(wxAPI.storage.has('daying-mini-local-v1'));
+  assert.equal(cloud.view.storageError,true);
+  assert.equal(cloud.view.records.apple.mastered,true);
+});

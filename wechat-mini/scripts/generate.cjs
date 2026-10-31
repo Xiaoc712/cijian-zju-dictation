@@ -1,0 +1,15 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const root = path.resolve(__dirname, '..');
+const shared = path.resolve(root, '../shared');
+const ts = require('typescript');
+let source = fs.readFileSync(path.join(shared, 'learning.ts'), 'utf8');
+source = source.replace(/crypto\.randomUUID\(\)/g, 'makeId()');
+source += '\nexport function makeId(): string { return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 12) + "-" + Math.random().toString(36).slice(2, 12); }\n';
+const output = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2017, module: ts.ModuleKind.CommonJS } }).outputText;
+fs.writeFileSync(path.join(root, 'miniprogram/lib/learning.js'), '// Generated from the tested web learning core. Run scripts/generate.cjs to refresh.\n' + output);
+const serverCore = path.join(root, 'cloudfunctions/studySync/learning.js');
+fs.writeFileSync(serverCore, output);
+const data = require('../miniprogram/data/vocabulary');
+fs.writeFileSync(path.join(root, 'miniprogram/data/vocabulary.js'), 'module.exports=' + JSON.stringify(data) + ';\n');
+console.log(JSON.stringify({ books: data.books.length, words: data.words.length }));
